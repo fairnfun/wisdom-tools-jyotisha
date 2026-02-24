@@ -107,7 +107,7 @@ header {
 }
 
 header h1 {
-    font-family: 'Raleway', 'Segoe UI', sans-serif;
+    font-family: 'Fraunces', Georgia, serif;
     font-size: 2.5rem;
     margin-bottom: 5px;
     color: var(--indian-yellow);
@@ -117,7 +117,7 @@ header h1 {
 }
 
 header .tagline {
-    font-family: 'Raleway', 'Segoe UI', sans-serif;
+    font-family: 'Fraunces', Georgia, serif;
     font-size: 1rem;
     color: var(--indian-yellow);
     opacity: 0.9;
@@ -351,9 +351,8 @@ header h2 {
 .planet-ketu { color: #c0392b; }
 
 /* Status Badges */
-/* Stärke-Badges (Svakṣetra, Ucca) */
-.status-exalted,
-.status-own {
+/* Positive Verfassung (Ucca, Svastha, Digbala, Vakrī) — Grün */
+.status-positive {
     display: inline-block;
     background-color: var(--oregano);
     color: #FFFFFF;
@@ -361,10 +360,11 @@ header h2 {
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
+    margin: 2px;
 }
 
-/* Schwäche-Badge (Nīca) */
-.status-debilitated {
+/* Negative Verfassung (Nīca, Astagata) — Rot */
+.status-negative {
     display: inline-block;
     background-color: var(--redwood);
     color: #FFFFFF;
@@ -372,22 +372,7 @@ header h2 {
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
-}
-
-/* Mūlatrikoṇa Badge */
-.status-moolatrikona {
-    display: inline-block;
-    background-color: var(--oregano);
-    color: #FFFFFF;
-    padding: 4px 10px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
-}
-
-.status-retrograde {
-    font-style: italic;
-    color: #7f8c8d;
+    margin: 2px;
 }
 
 /* Dasha Bereich */
@@ -716,7 +701,7 @@ footer {
 
 /* Tagline im Footer */
 .footer-tagline {
-    font-family: 'Raleway', 'Segoe UI', sans-serif;
+    font-family: 'Fraunces', Georgia, serif;
     font-style: italic;
     font-size: 13px;
     color: var(--oxford-brown);
@@ -1623,7 +1608,7 @@ footer a:hover {
                                 <th>Nakshatra</th>
                                 <th>Pada</th>
                                 <th>Herrscher</th>
-                                <th>Status</th>
+                                <th>Verfassung</th>
                             </tr>
                         </thead>
                         <tbody></tbody>
@@ -16858,13 +16843,45 @@ const Ephemeris = {
         };
     },
 
-    getPlanetStatus: function(planetId, signIndex) {
+    getPlanetStatus: function(planetId, signIndex, degreeInSign) {
         const planet = this.planets.find(p => p.id === planetId);
         if (!planet) return 'normal';
+
+        // Mercury special rule: Virgo (index 5) split at 15°
+        // 0-15° = own sign (Svastha), 15-30° = exalted (Ucca)
+        if (planetId === 'Mercury' && signIndex === 5) {
+            if (degreeInSign !== undefined && degreeInSign >= 15) {
+                return 'exalted';
+            }
+            return 'own';
+        }
+
         if (planet.exaltation === signIndex) return 'exalted';
         if (planet.debilitation === signIndex) return 'debilitated';
         if (planet.ownSigns && planet.ownSigns.includes(signIndex)) return 'own';
         return 'normal';
+    },
+
+    // Digbala (Directional Strength) - planet gains strength in specific houses
+    // Jupiter/Mercury: House 1 (East), Sun/Mars: House 10 (South),
+    // Moon/Venus: House 4 (North), Saturn: House 7 (West)
+    hasDigbala: function(planetId, house) {
+        const digbalaHouses = {
+            'Jupiter': 1, 'Mercury': 1,
+            'Sun': 10, 'Mars': 10,
+            'Moon': 4, 'Venus': 4,
+            'Saturn': 7
+        };
+        return digbalaHouses[planetId] === house;
+    },
+
+    // Astagata (Combust) - planet within 6° of Sun's longitude
+    // Sun itself, Rahu and Ketu cannot be combust
+    isCombust: function(planetId, planetLongitude, sunLongitude) {
+        if (planetId === 'Sun' || planetId === 'Rahu' || planetId === 'Ketu') return false;
+        let diff = Math.abs(planetLongitude - sunLongitude);
+        if (diff > 180) diff = 360 - diff;
+        return diff < 6;
     },
 
     isRetrograde: function(jd, planet) {
@@ -16956,7 +16973,8 @@ const VedicCalculations = {
 
             const signIndex = Ephemeris.getSign(siderealLong);
             const nakshatra = Ephemeris.getNakshatra(siderealLong);
-            const status = Ephemeris.getPlanetStatus(name, signIndex);
+            const degreeInSign = siderealLong % 30;
+            const status = Ephemeris.getPlanetStatus(name, signIndex, degreeInSign);
 
             // Retrograde-Status direkt aus der Berechnung oder per Hilfsfunktion
             const retrograde = (pos.retrograde !== undefined) ? pos.retrograde : Ephemeris.isRetrograde(jd, name);
@@ -19135,7 +19153,7 @@ const Translations = {
                 nakshatra: "Nakṣatra",
                 pada: "Pāda",
                 ruler: "Herrscher",
-                status: "Status"
+                status: "Verfassung"
             },
             panchanga: {
                 title: "Pañcāṅga - Fünfgliedrige Zeitrechnung",
@@ -19166,8 +19184,10 @@ const Translations = {
             status: {
                 exalted: "Ucca (Erhöht)",
                 debilitated: "Nīca (Gefallen)",
-                own: "Svakṣetra (Eigenes Zeichen)",
-                retrograde: "Vakrī"
+                own: "Svastha (Eigenes Zeichen)",
+                digbala: "Digbala (Richtungsstärke)",
+                combust: "Astagata (Verbrannt)",
+                retrograde: "Vakrī (Rückläufig)"
             },
             info: {
                 ascendant: "Lagna (Aszendent)",
@@ -19249,7 +19269,7 @@ const Translations = {
                 nakshatra: "Nakṣatra",
                 pada: "Pāda",
                 ruler: "Ruler",
-                status: "Status"
+                status: "Condition"
             },
             panchanga: {
                 title: "Pañcāṅga - Five Limbs of Time",
@@ -19280,8 +19300,10 @@ const Translations = {
             status: {
                 exalted: "Ucca (Exalted)",
                 debilitated: "Nīca (Debilitated)",
-                own: "Svakṣetra (Own Sign)",
-                retrograde: "Vakrī"
+                own: "Svastha (Own Sign)",
+                digbala: "Digbala (Directional Strength)",
+                combust: "Astagata (Combust)",
+                retrograde: "Vakrī (Retrograde)"
             },
             info: {
                 ascendant: "Lagna (Ascendant)",
@@ -20542,31 +20564,44 @@ function updatePlanetsTable() {
         // Pada sicher abrufen
         const pada = planet.nakshatra ? planet.nakshatra.pada : 1;
 
-        // Status-Klassen
-        let statusClass = '';
-        let statusText = '';
+        // Alle Conditions sammeln (mehrere möglich)
+        const conditions = [];
+        const sunLong = currentChart.planets['Sun'] ? currentChart.planets['Sun'].longitude : 0;
 
+        // 1. Grundstatus: Ucca, Svastha, Nīca
         switch (planet.status) {
             case 'exalted':
-                statusClass = 'status-exalted';
-                statusText = t('status.exalted');
-                break;
-            case 'debilitated':
-                statusClass = 'status-debilitated';
-                statusText = t('status.debilitated');
+                conditions.push({ class: 'status-positive', text: t('status.exalted') });
                 break;
             case 'own':
-                statusClass = 'status-own';
-                statusText = t('status.own');
+                conditions.push({ class: 'status-positive', text: t('status.own') });
                 break;
-            default:
-                statusText = '-';
+            case 'debilitated':
+                conditions.push({ class: 'status-negative', text: t('status.debilitated') });
+                break;
         }
 
-        // Rahu und Ketu nicht als rückläufig markieren
+        // 2. Digbala (Richtungsstärke) — basierend auf Haus
+        if (Ephemeris.hasDigbala(planetId, planet.house)) {
+            conditions.push({ class: 'status-positive', text: t('status.digbala') });
+        }
+
+        // 3. Vakrī (Rückläufig) — grün, nicht für Rahu/Ketu
         if (planet.retrograde && planetId !== 'Rahu' && planetId !== 'Ketu') {
-            statusText += ` ${t('status.retrograde')}`;
-            statusClass += ' status-retrograde';
+            conditions.push({ class: 'status-positive', text: t('status.retrograde') });
+        }
+
+        // 4. Astagata (Verbrannt) — rot, innerhalb 6° der Sonne
+        if (Ephemeris.isCombust(planetId, planet.longitude, sunLong)) {
+            conditions.push({ class: 'status-negative', text: t('status.combust') });
+        }
+
+        // HTML für Conditions generieren
+        let statusHtml = '-';
+        if (conditions.length > 0) {
+            statusHtml = conditions.map(c =>
+                `<span class="${c.class}">${c.text}</span>`
+            ).join(' ');
         }
 
         row.innerHTML = `
@@ -20576,7 +20611,7 @@ function updatePlanetsTable() {
             <td>${nakshatraName}</td>
             <td>${pada}</td>
             <td>${rulerName}</td>
-            <td class="${statusClass}">${statusText}</td>
+            <td>${statusHtml}</td>
         `;
 
         tbody.appendChild(row);
